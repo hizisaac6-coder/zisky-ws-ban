@@ -52,8 +52,8 @@ WHATSAPP_PHONE_NUMBER_ID = "669101662914614"  # Optional
 
 # ========== REPORT SETTINGS ==========
 EMAILS_PER_TARGET = 30           # Number of emails to send per target
-MIN_DELAY_SECONDS = 20           # Minimum delay between emails
-MAX_DELAY_SECONDS = 45           # Maximum delay between emails
+MIN_DELAY_SECONDS = 2          # Minimum delay between emails
+MAX_DELAY_SECONDS = 5         # Maximum delay between emails
 USE_PROXIES = True                # Set to False if you don't want proxy rotation
 
 # ========== PROXY SETTINGS ==========
