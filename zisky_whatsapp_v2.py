@@ -25,7 +25,6 @@ import random
 import re
 import smtplib
 import socket
-import socks
 import ssl
 import requests
 import json
@@ -34,7 +33,7 @@ from itertools import cycle
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from colorama import Fore, Style, init
+from colorama import Fore, Style, init, Back
 import urllib3
 import warnings
 
@@ -125,264 +124,50 @@ SUPPORT_EMAILS = [
     "escalations@whatsapp.com"
 ]
 
-# ========== PROXY MANAGER - LOAD FROM FILE ==========
-class ProxyManager:
-    def __init__(self):
-        self.proxies = []
-        self.current_index = 0
-        self.lock = threading.Lock()
-        self.load_from_file()
-    
-    def load_from_file(self):
-        """Load proxies from proxies.txt file"""
-        proxy_file = "proxies.txt"
-        
-        if not os.path.exists(proxy_file):
-            print(f"{Fore.RED}[❌] proxies.txt not found! Creating empty file.")
-            with open(proxy_file, 'w') as f:
-                f.write("# Add your proxies here - one per line\n")
-                f.write("# Format: ip:port or ip:port:user:pass\n")
-                f.write("# For IPv6, use [ipv6]:port format\n")
-            self.proxies = []
-            return
-        
-        with open(proxy_file, 'r') as f:
-            lines = f.readlines()
-        
-        for line in lines:
-            proxy = line.strip()
-            if proxy and not proxy.startswith('#'):
-                self.proxies.append(proxy)
-        
-        print(f"{Fore.GREEN}[✅] Loaded {len(self.proxies)} proxies from proxies.txt")
-        
-        if len(self.proxies) == 0:
-            print(f"{Fore.YELLOW}[⚠️] No proxies found in proxies.txt")
-    
-    def get_proxy(self):
-        """Get next proxy in rotation - FAST, NO TESTING"""
-        with self.lock:
-            if not self.proxies:
-                return None
-            
-            if self.current_index >= len(self.proxies):
-                self.current_index = 0
-            
-            proxy = self.proxies[self.current_index]
-            self.current_index += 1
-            return proxy
-    
-    def get_proxy_count(self):
-        return len(self.proxies)
-
-# ========== EMAIL SENDER WITH PROXY ROTATION ==========
+# ========== SIMPLE EMAIL SENDER - NO PROXIES ==========
 class EmailSender:
-    def __init__(self, proxy_manager=None):
-        self.proxy_manager = proxy_manager
+    def __init__(self):
         self.email_accounts = EMAIL_ACCOUNTS
         self.account_cycle = cycle(EMAIL_ACCOUNTS)
         self.sent_count = 0
         self.success_count = 0
         self.fail_count = 0
     
-    def parse_proxy(self, proxy_str):
-        """Parse proxy string - supports IPv4, IPv6, and authenticated proxies"""
-        proxy_str = proxy_str.strip()
-        
-        # Check for IPv6 with brackets [2001:db8::1]:port
-        ipv6_match = re.match(r'^\[([a-fA-F0-9:]+)\]:(\d+)(?::(.+))?$', proxy_str)
-        if ipv6_match:
-            ip = ipv6_match.group(1)
-            port = int(ipv6_match.group(2))
-            auth = ipv6_match.group(3)
-            
-            if auth and ':' in auth:
-                username, password = auth.split(':', 1)
-                return {
-                    'ip': ip,
-                    'port': port,
-                    'username': username,
-                    'password': password,
-                    'is_ipv6': True
-                }
-            else:
-                return {
-                    'ip': ip,
-                    'port': port,
-                    'username': None,
-                    'password': None,
-                    'is_ipv6': True
-                }
-        
-        # Check for IPv6 without brackets (less common, but handle it)
-        if proxy_str.count(':') > 1 and '[' not in proxy_str:
-            # This is likely an IPv6 address without brackets - try to parse last part as port
-            parts = proxy_str.split(':')
-            if len(parts) >= 2:
-                # Last part might be port
-                possible_port = parts[-1]
-                if possible_port.isdigit():
-                    ip = ':'.join(parts[:-1])
-                    port = int(possible_port)
-                    return {
-                        'ip': ip,
-                        'port': port,
-                        'username': None,
-                        'password': None,
-                        'is_ipv6': True
-                    }
-        
-        # Handle IPv4 with possible auth
-        parts = proxy_str.split(':')
-        
-        if len(parts) == 2:
-            # ip:port format
-            return {
-                'ip': parts[0],
-                'port': int(parts[1]),
-                'username': None,
-                'password': None,
-                'is_ipv6': False
-            }
-        elif len(parts) == 4:
-            # ip:port:user:pass format
-            return {
-                'ip': parts[0],
-                'port': int(parts[1]),
-                'username': parts[2],
-                'password': parts[3],
-                'is_ipv6': False
-            }
-        
-        return None
-    
-    def setup_socks_proxy(self, proxy_info):
-        """Setup SOCKS proxy for either IPv4 or IPv6"""
-        try:
-            if proxy_info['username'] and proxy_info['password']:
-                # Authenticated proxy
-                socks.set_default_proxy(
-                    socks.SOCKS5, 
-                    proxy_info['ip'], 
-                    proxy_info['port'],
-                    True,
-                    proxy_info['username'],
-                    proxy_info['password']
-                )
-            else:
-                # Regular proxy
-                socks.set_default_proxy(
-                    socks.SOCKS5, 
-                    proxy_info['ip'], 
-                    proxy_info['port']
-                )
-            
-            # Replace socket with socks socket
-            socket.socket = socks.socksocket
-            
-            # For IPv6, we need to set additional socket options
-            if proxy_info.get('is_ipv6', False):
-                # Create a test socket to verify IPv6 works
-                test_sock = socks.socksocket()
-                test_sock.settimeout(5)
-                try:
-                    # Just test the proxy by creating a connection
-                    test_sock.connect(('8.8.8.8', 53))
-                    test_sock.close()
-                except Exception as e:
-                    # If IPv6 fails, reset and raise exception
-                    socks.set_default_proxy()
-                    socket.socket = socket.socket
-                    raise Exception(f"IPv6 proxy connection failed: {e}")
-            
-            return True
-        except Exception as e:
-            print(f"{Fore.YELLOW}[⚠️] Proxy setup failed: {e}")
-            return False
-    
-    def send_email(self, to_email, subject, body, use_proxy=True):
-        """Send email with proxy rotation - Supports IPv4 & IPv6"""
+    def send_email(self, to_email, subject, body, use_proxy=False):
+        """Simple email sending - NO PROXIES, just like your friend's tool"""
         
         # Get next email account
         account = next(self.account_cycle)
         
-        # Save original socket
-        original_socket = socket.socket
-        
-        # Try up to 3 different proxies if first fails
-        max_retries = 3
-        
-        for retry in range(max_retries):
-            proxy_info = None
-            proxy_str = "No proxy"
+        try:
+            # Create message
+            msg = MIMEMultipart()
+            msg['From'] = account['email']
+            msg['To'] = to_email
+            msg['Subject'] = subject
             
-            try:
-                # Set up proxy if enabled
-                if use_proxy and self.proxy_manager:
-                    proxy_str = self.proxy_manager.get_proxy()
-                    if proxy_str:
-                        proxy_info = self.parse_proxy(proxy_str)
-                        
-                        if proxy_info:
-                            # Setup proxy connection
-                            if not self.setup_socks_proxy(proxy_info):
-                                continue
-                
-                # Create message
-                msg = MIMEMultipart()
-                msg['From'] = account['email']
-                msg['To'] = to_email
-                msg['Subject'] = subject
-                
-                # Add random headers
-                msg['X-Mailer'] = f'Microsoft Outlook 16.0.{random.randint(1000,9999)}'
-                msg['X-Priority'] = str(random.randint(1, 3))
-                msg['Message-ID'] = f"<{random.randint(1000000,9999999)}.{datetime.now().timestamp()}@{account['email'].split('@')[1]}>"
-                
-                msg.attach(MIMEText(body, 'plain'))
-                
-                # Send email
-                context = ssl.create_default_context()
-                
-                with smtplib.SMTP(account['smtp_server'], account['smtp_port'], timeout=30) as server:
-                    server.starttls(context=context)
-                    server.login(account['email'], account['password'])
-                    server.send_message(msg)
-                
-                # Reset socket
-                if use_proxy and self.proxy_manager:
-                    socks.set_default_proxy()
-                    socket.socket = original_socket
-                
-                self.sent_count += 1
-                self.success_count += 1
-                
-                # Show which proxy worked
-                if proxy_info:
-                    proxy_type = "IPv6" if proxy_info.get('is_ipv6', False) else "IPv4"
-                    print(f"{Fore.GREEN}✓ Used {proxy_type} proxy: {proxy_info['ip']}:{proxy_info['port']}")
-                
-                return True
-                
-            except Exception as e:
-                # Reset socket
-                try:
-                    socks.set_default_proxy()
-                    socket.socket = original_socket
-                except:
-                    pass
-                
-                # If this was the last retry, fail
-                if retry == max_retries - 1:
-                    self.fail_count += 1
-                    error_msg = str(e)[:50]
-                    print(f"{Fore.RED}✗ Failed after {max_retries} proxies: {error_msg}")
-                    return False
-                
-                # Try next proxy immediately
-                continue
-        
-        return False
+            # Add random headers to look legit
+            msg['X-Mailer'] = f'Microsoft Outlook 16.0.{random.randint(1000,9999)}'
+            msg['X-Priority'] = str(random.randint(1, 3))
+            msg['Message-ID'] = f"<{random.randint(1000000,9999999)}.{datetime.now().timestamp()}@{account['email'].split('@')[1]}>"
+            
+            msg.attach(MIMEText(body, 'plain'))
+            
+            # Send email
+            context = ssl.create_default_context()
+            
+            with smtplib.SMTP(account['smtp_server'], account['smtp_port'], timeout=30) as server:
+                server.starttls(context=context)
+                server.login(account['email'], account['password'])
+                server.send_message(msg)
+            
+            self.sent_count += 1
+            self.success_count += 1
+            return True
+            
+        except Exception as e:
+            self.fail_count += 1
+            return False
 
 # ========== WHATSAPP API FUNCTIONS ==========
 def check_whatsapp_number(phone):
@@ -428,7 +213,7 @@ class ReportTemplates:
     
     @staticmethod
     def get_unban_temp(phone):
-        """Temporary unban request template"""
+        """Temporary unban request template - LONG VERSION"""
         case_id = random.randint(100000, 999999)
         return f"""
 Dear WhatsApp Appeals Team,
@@ -454,7 +239,7 @@ A Loyal WhatsApp User
 
     @staticmethod
     def get_unban_perm(phone):
-        """Permanent unban request template"""
+        """Permanent unban request template - LONG VERSION"""
         case_id = random.randint(100000, 999999)
         return f"""
 Dear WhatsApp Appeals Team,
@@ -480,7 +265,7 @@ A Dedicated WhatsApp User
 
     @staticmethod
     def get_fraud_report(phone):
-        """Fraud/scam report template"""
+        """Fraud/scam report template - LONG VERSION"""
         case_id = random.randint(100000, 999999)
         return f"""
 URGENT: FRAUD REPORT - Phone Number: {phone}
@@ -518,7 +303,7 @@ Concerned User
 
     @staticmethod
     def get_hard_report(phone):
-        """Hard/strong fraud report template (escalated)"""
+        """Hard/strong fraud report template (escalated) - LONG VERSION"""
         case_id = random.randint(100000, 999999)
         return f"""
 ╔══════════════════════════════════════════════════════════╗
@@ -612,19 +397,8 @@ def login():
 # ========== MAIN APPLICATION ==========
 class ZiskyWhatsAppBan:
     def __init__(self):
-        self.proxy_manager = None
-        self.email_sender = None
+        self.email_sender = EmailSender()
         self.running = True
-        
-        # Initialize proxy manager if enabled
-        try:
-            if USE_PROXIES:
-                self.proxy_manager = ProxyManager()
-        except NameError:
-            print(f"{Fore.YELLOW}[⚠️] USE_PROXIES not defined. Using default: True")
-            self.proxy_manager = ProxyManager()
-        
-        self.email_sender = EmailSender(self.proxy_manager)
     
     def initialize(self):
         """Initialize tool"""
@@ -634,18 +408,9 @@ class ZiskyWhatsAppBan:
         print(f"{Fore.CYAN}│  Initializing Zisky Engine...       │")
         print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}\n")
         
-        # Show proxy status
-        if self.proxy_manager:
-            proxy_count = self.proxy_manager.get_proxy_count()
-            print(f"{Fore.CYAN}[🌐] Proxy rotation: ENABLED")
-            print(f"{Fore.CYAN}[📊] Proxies loaded: {proxy_count}")
-            if proxy_count == 0:
-                print(f"{Fore.YELLOW}[⚠️] No proxies in proxies.txt - will use direct connection")
-        else:
-            print(f"{Fore.YELLOW}[⚠️] Proxy rotation: DISABLED")
-        
         print(f"{Fore.GREEN}[✅] Email accounts loaded: {len(EMAIL_ACCOUNTS)}")
         print(f"{Fore.GREEN}[✅] WhatsApp support emails: {len(SUPPORT_EMAILS)}")
+        print(f"{Fore.GREEN}[✅] Proxy rotation: DISABLED (using direct connection)")
         print(f"{Fore.GREEN}[✅] Initialization complete!")
         time.sleep(2)
     
@@ -664,8 +429,6 @@ class ZiskyWhatsAppBan:
         
         # Status bar
         print(f"{Fore.CYAN}┌─────────────────────────────────────┐")
-        if self.proxy_manager:
-            print(f"{Fore.CYAN}│  Proxies: {self.proxy_manager.get_proxy_count()} available{' ' * (20 - len(str(self.proxy_manager.get_proxy_count())))}│")
         print(f"{Fore.CYAN}│  Emails: {self.email_sender.sent_count} sent ({self.email_sender.success_count} ok, {self.email_sender.fail_count} failed)│")
         print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}")
         print()
@@ -680,7 +443,7 @@ class ZiskyWhatsAppBan:
                 print(f"{Fore.RED}❌ Invalid format! Must start with + and contain 10-15 digits.")
     
     def send_mass_emails(self, phone, template_func, count=30):
-        """Send multiple emails with proxy rotation"""
+        """Send multiple emails with rotation"""
         
         # Get count from main.py
         try:
@@ -706,19 +469,12 @@ class ZiskyWhatsAppBan:
             # Get template
             body = template_func(phone)
             
-            # Check if USE_PROXIES exists
-            use_proxy = True
-            try:
-                use_proxy = USE_PROXIES
-            except NameError:
-                use_proxy = True
-            
             # Show sending animation
             spinner = SPINNER_FRAMES[i % len(SPINNER_FRAMES)]
             print(f"{Fore.YELLOW}{spinner} Sending email {i+1}/{count}...", end="\r")
             
             # Send email
-            result = self.email_sender.send_email(to_email, subject, body, use_proxy=use_proxy)
+            result = self.email_sender.send_email(to_email, subject, body)
             
             if result:
                 success += 1
@@ -740,8 +496,8 @@ class ZiskyWhatsAppBan:
                 min_delay = MIN_DELAY_SECONDS
                 max_delay = MAX_DELAY_SECONDS
             except NameError:
-                min_delay = 5
-                max_delay = 10
+                min_delay = 2
+                max_delay = 5
             
             delay = random.uniform(min_delay, max_delay)
             time.sleep(delay)
@@ -830,11 +586,7 @@ class ZiskyWhatsAppBan:
             print(f"  {i}. {masked}")
         
         print(f"\n{Fore.GREEN}📧 Support Emails: {len(SUPPORT_EMAILS)}")
-        
-        if self.proxy_manager:
-            print(f"\n{Fore.GREEN}🌐 Proxies: {self.proxy_manager.get_proxy_count()} available")
-        else:
-            print(f"\n{Fore.YELLOW}🌐 Proxies: DISABLED")
+        print(f"\n{Fore.GREEN}🌐 Proxies: DISABLED (direct connection)")
         
         print(f"\n{Fore.GREEN}📊 Statistics:")
         print(f"  Total emails sent: {self.email_sender.sent_count}")
@@ -847,11 +599,9 @@ class ZiskyWhatsAppBan:
         try:
             print(f"  Emails per target: {EMAILS_PER_TARGET}")
             print(f"  Delay range: {MIN_DELAY_SECONDS}-{MAX_DELAY_SECONDS}s")
-            print(f"  Proxy rotation: {USE_PROXIES}")
         except NameError:
             print(f"  Emails per target: 30 (default)")
-            print(f"  Delay range: 5-10s (default)")
-            print(f"  Proxy rotation: True (default)")
+            print(f"  Delay range: 2-5s (default)")
         
         input(f"\n{Fore.YELLOW}Press Enter to continue...")
     
