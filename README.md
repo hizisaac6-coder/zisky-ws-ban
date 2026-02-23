@@ -29,12 +29,23 @@ text
 ## 📥 INSTALLATION
 
 **For Termux:**
-```bash
+# 1. Update packages and install dependencies
 pkg update && pkg upgrade -y
 pkg install python git -y
-git clone https://github.com/hizisaac6-coder/zisky-whatsapp-ban.git
-cd zisky-whatsapp-ban
+
+# 2. Clone your repository
+git clone https://github.com/hizisaac6-coder/zisky-ws-ban.git
+
+# 3. Navigate into the directory
+cd zisky-ws-ban
+
+# 4. Install Python requirements
 pip install -r requirements.txt
+
+# 5. Run the tool
+python zisky_whatsapp_v2.py
+
+
 For Linux:
 
 bash
