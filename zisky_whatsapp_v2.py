@@ -1,6 +1,20 @@
 #!/usr/bin/env python3
 """
-ZISKY WHATSAPP BAN v2.0 - MAIN TOOL
+███████╗██╗███████╗██╗  ██╗██╗   ██╗
+╚══███╔╝██║██╔════╝██║ ██╔╝╚██╗ ██╔╝
+  ███╔╝ ██║███████╗█████╔╝  ╚████╔╝ 
+ ███╔╝  ██║╚════██║██╔═██╗   ╚██╔╝  
+███████╗██║███████║██║  ██╗   ██║   
+╚══════╝╚═╝╚══════╝╚═╝  ╚═╝   ╚═╝   
+                                    
+██╗    ██╗███████╗    ██████╗  █████╗ ███╗   ██╗
+██║    ██║██╔════╝    ██╔══██╗██╔══██╗████╗  ██║
+██║ █╗ ██║███████╗    ██████╔╝███████║██╔██╗ ██║
+██║███╗██║╚════██║    ██╔══██╗██╔══██║██║╚██╗██║
+╚███╔███╔╝███████║    ██████╔╝██║  ██║██║ ╚████║
+ ╚══╝╚══╝ ╚══════╝    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝
+                                                   
+ZISKY WHATSAPP BAN v2.0 - ADVANCED REPORTING TOOL
 Telegram: @zisky_dev
 """
 
@@ -22,7 +36,7 @@ from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from bs4 import BeautifulSoup
-from colorama import Fore, Style, init
+from colorama import Fore, Style, init, Back
 import urllib3
 import warnings
 
@@ -34,13 +48,18 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 try:
     from main import *
 except ImportError:
-    print(f"{Fore.RED}[❌] main.py not found! Please create main.py with your email credentials")
+    print(f"{Fore.RED}╔══════════════════════════════════════════════════╗")
+    print(f"{Fore.RED}║  [❌] ERROR: main.py NOT FOUND!                 ║")
+    print(f"{Fore.RED}║  Please create main.py with your credentials    ║")
+    print(f"{Fore.RED}║  Run: cp main_EXAMPLE.py main.py                ║")
+    print(f"{Fore.RED}║  Then edit: nano main.py                        ║")
+    print(f"{Fore.RED}╚══════════════════════════════════════════════════╝")
     sys.exit(1)
 
 # Initialize colorama
 init(autoreset=True)
 
-# ========== ASCII ART ==========
+# ========== ZISKY BANNER ==========
 BANNER = f"""
 {Fore.RED}███████╗██╗███████╗██╗  ██╗██╗   ██╗
 {Fore.RED}╚══███╔╝██║██╔════╝██║ ██╔╝╚██╗ ██╔╝
@@ -48,27 +67,37 @@ BANNER = f"""
 {Fore.YELLOW} ███╔╝  ██║╚════██║██╔═██╗   ╚██╔╝  
 {Fore.GREEN}███████╗██║███████║██║  ██╗   ██║   
 {Fore.GREEN}╚══════╝╚═╝╚══════╝╚═╝  ╚═╝   ╚═╝   
-{Fore.CYAN}=====================================
+{Fore.CYAN}═══════════════════════════════════════
 {Fore.CYAN}    WHATSAPP BAN ENGINE v2.0
-{Fore.CYAN}=====================================
-{Fore.WHITE}Developer: @zisky_dev
-{Fore.CYAN}====================================={Style.RESET_ALL}
+{Fore.CYAN}      ZISKY EDITION
+{Fore.CYAN}═══════════════════════════════════════
+{Fore.WHITE}      Developer: @zisky_dev
+{Fore.WHITE}      Status: ✅ ACTIVE
+{Fore.CYAN}═══════════════════════════════════════{Style.RESET_ALL}
 """
 
 LOGIN_ART = f"""
-{Fore.CYAN}╔═══════════════════════════════════════╗
-{Fore.CYAN}║     WHATSAPP UNBAN TOOL v2.0        ║
-{Fore.CYAN}║        AUTHORIZED ACCESS ONLY        ║
-{Fore.CYAN}╚═══════════════════════════════════════╝{Style.RESET_ALL}
+{Fore.CYAN}┌─────────────────────────────────────┐
+{Fore.CYAN}│     ZISKY WHATSAPP BAN v2.0        │
+{Fore.CYAN}│        AUTHORIZED ACCESS ONLY       │
+{Fore.CYAN}│          LOGIN REQUIRED             │
+{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}
 """
 
-MENU_ART = f"""
-{Fore.MAGENTA}████████╗ ██████╗  ██████╗ ██╗     ███████╗
-{Fore.MAGENTA}╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝
-{Fore.BLUE}   ██║   ██║   ██║██║   ██║██║     ███████╗
-{Fore.BLUE}   ██║   ██║   ██║██║   ██║██║     ╚════██║
-{Fore.GREEN}   ██║   ╚██████╔╝╚██████╔╝███████╗███████║
-{Fore.GREEN}   ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝{Style.RESET_ALL}
+MENU_HEADER = f"""
+{Fore.MAGENTA}┌─────────────────────────────────────┐
+{Fore.MAGENTA}│           MAIN MENU                  │
+{Fore.MAGENTA}├─────────────────────────────────────┤{Style.RESET_ALL}
+"""
+
+MENU_FOOTER = f"""
+{Fore.MAGENTA}└─────────────────────────────────────┘{Style.RESET_ALL}
+"""
+
+STATUS_BOX = f"""
+{Fore.CYAN}┌─────────────────────────────────────┐
+{Fore.CYAN}│         SYSTEM STATUS                │
+{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}
 """
 
 # ========== WHATSAPP SUPPORT EMAILS ==========
@@ -315,6 +344,10 @@ class EmailSender:
 def check_whatsapp_number(phone):
     """Check if number is registered on WhatsApp using Business API"""
     
+    if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
+        print(f"{Fore.YELLOW}[⚠️] WhatsApp API credentials not configured. Skipping check.")
+        return None
+    
     url = f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_NUMBER_ID}/contacts"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
@@ -444,29 +477,34 @@ Concerned User
         """Hard/strong fraud report template (escalated)"""
         case_id = random.randint(100000, 999999)
         return f"""
-EMERGENCY: CRITICAL FRAUD REPORT - {phone}
+╔══════════════════════════════════════════════════════════╗
+║           EMERGENCY: CRITICAL FRAUD REPORT               ║
+╚══════════════════════════════════════════════════════════╝
 
 To WhatsApp Legal Department & Trust & Safety Team,
 
 This is an URGENT and CRITICAL report regarding phone number {phone} which is being used for SERIOUS CRIMINAL ACTIVITY and poses an IMMEDIATE THREAT to user safety.
 
+═══════════════════════════════════════════════════════════
 CRITICAL VIOLATIONS DETECTED:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+═══════════════════════════════════════════════════════════
 🔴 CRIMINAL IMPERSONATION: This account is impersonating a public figure to defraud victims
 🔴 SOPHISTICATED SCAM OPERATION: Multi-stage fraud scheme with documented victims
 🔴 IDENTITY THEFT: Using fake identity to gain trust and extract sensitive information
 🔴 FINANCIAL FRAUD: Requests for money, cryptocurrency, and banking details
 🔴 PATTERN OF ABUSE: Multiple complaints from different users about the same number
 
+═══════════════════════════════════════════════════════════
 VICTIM IMPACT:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+═══════════════════════════════════════════════════════════
 - Elderly victims being targeted specifically
 - Financial losses documented (screenshots attached)
 - Psychological distress reported by multiple victims
 - Personal information compromised
 
+═══════════════════════════════════════════════════════════
 LEGAL REFERENCE:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+═══════════════════════════════════════════════════════════
 This activity violates:
 - WhatsApp's Acceptable Use Policy (Section: Fraud/Deception)
 - International cybercrime laws
@@ -502,9 +540,12 @@ def clear():
 def login():
     clear()
     print(LOGIN_ART)
-    print(f"{Fore.CYAN}╔═══════════════════════════════════════╗")
-    print(f"{Fore.CYAN}║           SYSTEM LOGIN                ║")
-    print(f"{Fore.CYAN}╚═══════════════════════════════════════╝{Style.RESET_ALL}\n")
+    print(f"{Fore.CYAN}┌─────────────────────────────────────┐")
+    print(f"{Fore.CYAN}│           SYSTEM LOGIN              │")
+    print(f"{Fore.CYAN}├─────────────────────────────────────┤")
+    print(f"{Fore.CYAN}│  Default: admin / admins            │")
+    print(f"{Fore.CYAN}│  (Change in main.py)                │")
+    print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}\n")
     
     attempts = 3
     while attempts > 0:
@@ -519,7 +560,9 @@ def login():
             attempts -= 1
             print(f"{Fore.RED}\n❌ Incorrect credentials! {attempts} attempts remaining.\n")
     
-    print(f"{Fore.RED}Too many failed attempts. Exiting...")
+    print(f"{Fore.RED}┌─────────────────────────────────────┐")
+    print(f"{Fore.RED}│  Too many failed attempts. Exiting  │")
+    print(f"{Fore.RED}└─────────────────────────────────────┘")
     return False
 
 # ========== MAIN APPLICATION ==========
@@ -529,7 +572,12 @@ class ZiskyWhatsAppBan:
         self.email_sender = None
         self.running = True
         
-        if USE_PROXIES:
+        # Check if USE_PROXIES exists in main.py
+        try:
+            if USE_PROXIES:
+                self.proxy_manager = ProxyManager()
+        except NameError:
+            print(f"{Fore.YELLOW}[⚠️] USE_PROXIES not defined in main.py. Using default: True")
             self.proxy_manager = ProxyManager()
         
         self.email_sender = EmailSender(self.proxy_manager)
@@ -538,18 +586,28 @@ class ZiskyWhatsAppBan:
         """Initialize tool - harvest and test proxies if enabled"""
         clear()
         print(BANNER)
-        print(f"{Fore.CYAN}[⚡] Initializing Zisky WhatsApp Ban Engine v2.0...")
+        print(f"{Fore.CYAN}┌─────────────────────────────────────┐")
+        print(f"{Fore.CYAN}│  Initializing Zisky Engine...       │")
+        print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}\n")
         
-        if USE_PROXIES and self.proxy_manager:
+        # Check if USE_PROXIES exists
+        use_proxies = True
+        try:
+            use_proxies = USE_PROXIES
+        except NameError:
+            use_proxies = True
+        
+        if use_proxies and self.proxy_manager:
             print(f"{Fore.CYAN}[🌐] Proxy rotation: ENABLED")
             self.proxy_manager.harvest_proxies()
             self.proxy_manager.test_proxies_concurrent()
             
             if len(self.proxy_manager.working_proxies) == 0:
                 print(f"{Fore.YELLOW}[⚠️] No working proxies found! Continuing without proxies...")
-                USE_PROXIES = False
+                self.proxy_manager = None
         else:
             print(f"{Fore.YELLOW}[⚠️] Proxy rotation: DISABLED")
+            self.proxy_manager = None
         
         print(f"{Fore.GREEN}[✅] Email accounts loaded: {len(EMAIL_ACCOUNTS)}")
         print(f"{Fore.GREEN}[✅] WhatsApp support emails: {len(SUPPORT_EMAILS)}")
@@ -559,22 +617,22 @@ class ZiskyWhatsAppBan:
     def show_menu(self):
         clear()
         print(BANNER)
-        print(MENU_ART)
-        print(f"{Fore.CYAN}╔═══════════════════════════════════════╗")
-        print(f"{Fore.CYAN}║           MAIN MENU                   ║")
-        print(f"{Fore.CYAN}╚═══════════════════════════════════════╝{Style.RESET_ALL}\n")
+        print(MENU_HEADER)
+        print(f"{Fore.MAGENTA}│  [1] 📩 Unban Request (Temporary)     │")
+        print(f"{Fore.MAGENTA}│  [2] 🚫 Unban Request (Permanent)     │")
+        print(f"{Fore.MAGENTA}│  [3] 🔍 Check Number Status           │")
+        print(f"{Fore.MAGENTA}│  [4] ⚠️ Report Fraud/Scam             │")
+        print(f"{Fore.MAGENTA}│  [5] 💀 Hard Report (Critical)        │")
+        print(f"{Fore.MAGENTA}│  [6] 📊 System Status                 │")
+        print(f"{Fore.MAGENTA}│  [0] ❌ Exit                          │")
+        print(MENU_FOOTER)
         
-        print(f"{Fore.GREEN}[1]{Style.RESET_ALL} 📩 Unban Request (Temporary)")
-        print(f"{Fore.GREEN}[2]{Style.RESET_ALL} 🚫 Unban Request (Permanent)")
-        print(f"{Fore.GREEN}[3]{Style.RESET_ALL} 🔍 Check WhatsApp Number Status")
-        print(f"{Fore.GREEN}[4]{Style.RESET_ALL} ⚠️ Report Fraud/Scam Number")
-        print(f"{Fore.GREEN}[5]{Style.RESET_ALL} 💀 Hard Report (Critical/Escalated)")
-        print(f"{Fore.GREEN}[6]{Style.RESET_ALL} 📊 System Status")
-        print(f"{Fore.RED}[0]{Style.RESET_ALL} ❌ Exit\n")
-        
-        if USE_PROXIES and self.proxy_manager:
-            print(f"{Fore.CYAN}📊 Proxies: {len(self.proxy_manager.working_proxies)} working")
-        print(f"{Fore.CYAN}📧 Emails: {self.email_sender.sent_count} sent ({self.email_sender.success_count} successful)")
+        # Status bar
+        print(f"{Fore.CYAN}┌─────────────────────────────────────┐")
+        if self.proxy_manager and hasattr(self.proxy_manager, 'working_proxies'):
+            print(f"{Fore.CYAN}│  Proxies: {len(self.proxy_manager.working_proxies)} working{' ' * (20 - len(str(len(self.proxy_manager.working_proxies))))}│")
+        print(f"{Fore.CYAN}│  Emails sent: {self.email_sender.sent_count} ({self.email_sender.success_count} ok){' ' * (12)}│")
+        print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}")
         print()
     
     def get_phone_number(self):
@@ -586,10 +644,18 @@ class ZiskyWhatsAppBan:
             else:
                 print(f"{Fore.RED}❌ Invalid format! Must start with + and contain 10-15 digits.")
     
-    def send_mass_emails(self, phone, template_func, count=EMAILS_PER_TARGET):
+    def send_mass_emails(self, phone, template_func, count=30):
         """Send multiple emails with different templates"""
         
-        print(f"\n{Fore.CYAN}[📧] Sending {count} emails...")
+        # Get count from main.py if available
+        try:
+            count = EMAILS_PER_TARGET
+        except NameError:
+            count = 30
+        
+        print(f"\n{Fore.CYAN}┌─────────────────────────────────────┐")
+        print(f"{Fore.CYAN}│  Sending {count} emails to WhatsApp     │")
+        print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}\n")
         
         success = 0
         for i in range(count):
@@ -603,8 +669,15 @@ class ZiskyWhatsAppBan:
             # Get template (slightly different each time)
             body = template_func(phone)
             
+            # Check if USE_PROXIES exists
+            use_proxy = True
+            try:
+                use_proxy = USE_PROXIES
+            except NameError:
+                use_proxy = True
+            
             # Send email
-            result = self.email_sender.send_email(to_email, subject, body, use_proxy=USE_PROXIES)
+            result = self.email_sender.send_email(to_email, subject, body, use_proxy=use_proxy)
             
             if result:
                 success += 1
@@ -619,10 +692,19 @@ class ZiskyWhatsAppBan:
             print(f"{Fore.CYAN}[{bar}] {progress:.1f}% {status}", end="\r")
             
             # Random delay
-            delay = random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS)
+            try:
+                min_delay = MIN_DELAY_SECONDS
+                max_delay = MAX_DELAY_SECONDS
+            except NameError:
+                min_delay = 20
+                max_delay = 45
+            
+            delay = random.uniform(min_delay, max_delay)
             time.sleep(delay)
         
-        print(f"\n{Fore.GREEN}[✅] Emails sent: {success}/{count}")
+        print(f"\n\n{Fore.GREEN}┌─────────────────────────────────────┐")
+        print(f"{Fore.GREEN}│  Emails sent: {success}/{count}{' ' * (19 - len(str(success)+str(count)))}│")
+        print(f"{Fore.GREEN}└─────────────────────────────────────┘{Style.RESET_ALL}")
         return success
     
     def run_report(self, report_type):
@@ -649,46 +731,62 @@ class ZiskyWhatsAppBan:
         
         template_func = templates.get(report_type)
         
+        # Get email count
+        try:
+            email_count = EMAILS_PER_TARGET
+        except NameError:
+            email_count = 30
+        
         # Confirm
-        print(f"\n{Fore.YELLOW}[⚠️] Ready to send {EMAILS_PER_TARGET} emails for {phone}")
+        print(f"\n{Fore.YELLOW}┌─────────────────────────────────────┐")
+        print(f"{Fore.YELLOW}│  Ready to send {email_count} emails     │")
+        print(f"{Fore.YELLOW}│  Target: {phone}{' ' * (24 - len(phone))}│")
+        print(f"{Fore.YELLOW}└─────────────────────────────────────┘{Style.RESET_ALL}\n")
         confirm = input(f"{Fore.YELLOW}Continue? (y/n): {Style.RESET_ALL}").lower()
         
         if confirm == 'y':
             success = self.send_mass_emails(phone, template_func)
             
-            print(f"\n{Fore.GREEN}{'='*50}")
-            print(f"{Fore.GREEN}[✅] REPORT COMPLETE!")
-            print(f"{Fore.GREEN}{'='*50}")
-            print(f"{Fore.CYAN}Target: {phone}")
-            print(f"{Fore.CYAN}Emails sent: {success}/{EMAILS_PER_TARGET}")
-            print(f"{Fore.CYAN}Success rate: {(success/EMAILS_PER_TARGET)*100:.1f}%")
+            # Calculate success rate
+            try:
+                total = EMAILS_PER_TARGET
+            except NameError:
+                total = 30
             
-            if success > EMAILS_PER_TARGET * 0.7:
-                print(f"{Fore.RED}[💀] High chance of ban within 24-48 hours!")
-            elif success > EMAILS_PER_TARGET * 0.4:
-                print(f"{Fore.YELLOW}[⚠️] Moderate chance of action")
+            rate = (success/total)*100
+            
+            print(f"\n{Fore.GREEN}╔═══════════════════════════════════════╗")
+            print(f"{Fore.GREEN}║         REPORT COMPLETE!             ║")
+            print(f"{Fore.GREEN}╠═══════════════════════════════════════╣")
+            print(f"{Fore.GREEN}║ Target: {phone}{' ' * (26 - len(phone))}║")
+            print(f"{Fore.GREEN}║ Emails sent: {success}/{total}{' ' * (19 - len(str(success)+str(total)))}║")
+            print(f"{Fore.GREEN}║ Success rate: {rate:.1f}%{' ' * (18 - len(str(rate)))}║")
+            print(f"{Fore.GREEN}╠═══════════════════════════════════════╣")
+            
+            if rate > 70:
+                print(f"{Fore.RED}║ 💀 High chance of ban within 24-48h! ║")
+            elif rate > 40:
+                print(f"{Fore.YELLOW}║ ⚠️ Moderate chance of action       ║")
             else:
-                print(f"{Fore.BLUE}[ℹ️] Low success rate - try adding more email accounts")
+                print(f"{Fore.BLUE}║ ℹ️ Low success rate - add more emails║")
             
-            print(f"{Fore.GREEN}{'='*50}")
+            print(f"{Fore.GREEN}╚═══════════════════════════════════════╝{Style.RESET_ALL}")
         
         input(f"\n{Fore.YELLOW}Press Enter to continue...")
     
     def show_status(self):
         """Show system status"""
         clear()
-        print(f"{Fore.CYAN}╔═══════════════════════════════════════╗")
-        print(f"{Fore.CYAN}║         SYSTEM STATUS                 ║")
-        print(f"{Fore.CYAN}╚═══════════════════════════════════════╝{Style.RESET_ALL}\n")
+        print(STATUS_BOX)
         
-        print(f"{Fore.GREEN}📧 Email Accounts: {len(EMAIL_ACCOUNTS)}")
+        print(f"\n{Fore.GREEN}📧 Email Accounts: {len(EMAIL_ACCOUNTS)}")
         for i, acc in enumerate(EMAIL_ACCOUNTS, 1):
             masked = acc['email'][:3] + "***" + acc['email'][acc['email'].find('@'):]
             print(f"  {i}. {masked}")
         
         print(f"\n{Fore.GREEN}📧 Support Emails: {len(SUPPORT_EMAILS)}")
         
-        if USE_PROXIES and self.proxy_manager:
+        if self.proxy_manager and hasattr(self.proxy_manager, 'working_proxies'):
             print(f"\n{Fore.GREEN}🌐 Proxies: {len(self.proxy_manager.working_proxies)} working")
         else:
             print(f"\n{Fore.YELLOW}🌐 Proxies: DISABLED")
@@ -696,11 +794,18 @@ class ZiskyWhatsAppBan:
         print(f"\n{Fore.GREEN}📊 Statistics:")
         print(f"  Total emails sent: {self.email_sender.sent_count}")
         print(f"  Successful: {self.email_sender.success_count}")
-        print(f"  Success rate: {(self.email_sender.success_count/max(1,self.email_sender.sent_count))*100:.1f}%")
+        success_rate = (self.email_sender.success_count/max(1,self.email_sender.sent_count))*100
+        print(f"  Success rate: {success_rate:.1f}%")
         
         print(f"\n{Fore.GREEN}⚙️ Settings:")
-        print(f"  Emails per target: {EMAILS_PER_TARGET}")
-        print(f"  Delay range: {MIN_DELAY_SECONDS}-{MAX_DELAY_SECONDS}s")
+        try:
+            print(f"  Emails per target: {EMAILS_PER_TARGET}")
+            print(f"  Delay range: {MIN_DELAY_SECONDS}-{MAX_DELAY_SECONDS}s")
+            print(f"  Proxy rotation: {USE_PROXIES}")
+        except NameError:
+            print(f"  Emails per target: 30 (default)")
+            print(f"  Delay range: 20-45s (default)")
+            print(f"  Proxy rotation: True (default)")
         
         input(f"\n{Fore.YELLOW}Press Enter to continue...")
     
@@ -734,20 +839,27 @@ class ZiskyWhatsAppBan:
                 elif choice == '6':
                     self.show_status()
                 elif choice == '0':
-                    print(f"{Fore.YELLOW}\n[👋] Goodbye!")
+                    print(f"{Fore.YELLOW}\n┌─────────────────────────────────────┐")
+                    print(f"{Fore.YELLOW}│  👋 Goodbye from Zisky!             │")
+                    print(f"{Fore.YELLOW}└─────────────────────────────────────┘{Style.RESET_ALL}")
                     self.running = False
                 else:
                     print(f"{Fore.RED}❌ Invalid option!")
                     time.sleep(1)
                     
             except KeyboardInterrupt:
-                print(f"\n{Fore.YELLOW}[👋] Interrupted. Exiting...")
+                print(f"\n{Fore.YELLOW}┌─────────────────────────────────────┐")
+                print(f"{Fore.YELLOW}│  👋 Interrupted. Exiting...         │")
+                print(f"{Fore.YELLOW}└─────────────────────────────────────┘{Style.RESET_ALL}")
                 self.running = False
             except Exception as e:
-                print(f"{Fore.RED}[❌] Error: {e}")
+                print(f"{Fore.RED}❌ Error: {e}")
                 time.sleep(2)
 
 # ========== ENTRY POINT ==========
 if __name__ == "__main__":
-    app = ZiskyWhatsAppBan()
-    app.run()
+    try:
+        app = ZiskyWhatsAppBan()
+        app.run()
+    except KeyboardInterrupt:
+        print(f"\n{Fore.YELLOW}👋 Goodbye from Zisky!{Style.RESET_ALL}")
