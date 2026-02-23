@@ -30,13 +30,11 @@ import ssl
 import requests
 import json
 import threading
-import queue
 from itertools import cycle
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from bs4 import BeautifulSoup
-from colorama import Fore, Style, init, Back
+from colorama import Fore, Style, init
 import urllib3
 import warnings
 
@@ -61,7 +59,6 @@ init(autoreset=True)
 
 # Animation frames
 SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-PROXY_FRAMES = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘']
 
 # ========== ZISKY BANNER ==========
 BANNER = f"""
@@ -128,172 +125,54 @@ SUPPORT_EMAILS = [
     "escalations@whatsapp.com"
 ]
 
-# ========== PROXY MANAGER ==========
+# ========== PROXY MANAGER - LOAD FROM FILE ==========
 class ProxyManager:
     def __init__(self):
-        self.all_proxies = []
-        self.working_proxies = []
+        self.proxies = []
         self.current_index = 0
         self.lock = threading.Lock()
-        self.test_urls = [
-            "http://httpbin.org/ip",
-            "http://api.ipify.org?format=json",
-            "http://ident.me"
-        ]
-        
-        self.proxy_sources = [
-            "https://www.sslproxies.org/",
-            "https://free-proxy-list.net/",
-            "https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
-            "https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks4&timeout=10000&country=all",
-            "https://api.proxyscrape.com/v2/?request=getproxies&protocol=socks5&timeout=10000&country=all",
-            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
-            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt",
-            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
-            "https://www.proxy-list.download/api/v1/get?type=http",
-            "https://www.proxy-list.download/api/v1/get?type=https",
-            "https://www.proxy-list.download/api/v1/get?type=socks4",
-            "https://www.proxy-list.download/api/v1/get?type=socks5",
-        ]
+        self.load_from_file()
     
-    def harvest_proxies(self):
-        """Harvest proxies from all sources with animation"""
-        print(f"{Fore.CYAN}[🌐] Harvesting proxies from {len(self.proxy_sources)} sources...")
+    def load_from_file(self):
+        """Load proxies from proxies.txt file"""
+        proxy_file = "proxies.txt"
         
-        harvested = []
-        for i, source in enumerate(self.proxy_sources):
-            try:
-                # Animation
-                frame = PROXY_FRAMES[i % len(PROXY_FRAMES)]
-                print(f"{Fore.YELLOW}{frame} Fetching source {i+1}/{len(self.proxy_sources)}...", end="\r")
-                
-                headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
-                response = requests.get(source, headers=headers, timeout=15, verify=False)
-                
-                if response.status_code == 200:
-                    if 'api.proxyscrape.com' in source or 'raw.githubusercontent' in source:
-                        proxies = response.text.strip().split('\n')
-                        for proxy in proxies:
-                            proxy = proxy.strip()
-                            if proxy and ':' in proxy:
-                                harvested.append(proxy)
-                    else:
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        rows = soup.find_all('tr')
-                        for row in rows:
-                            cols = row.find_all('td')
-                            if len(cols) >= 2:
-                                ip = cols[0].text.strip()
-                                port = cols[1].text.strip()
-                                if ip and port and re.match(r'^\d+\.\d+\.\d+\.\d+$', ip):
-                                    harvested.append(f"{ip}:{port}")
-                
-                time.sleep(0.3)
-                
-            except Exception as e:
-                continue
+        if not os.path.exists(proxy_file):
+            print(f"{Fore.RED}[❌] proxies.txt not found! Creating empty file.")
+            with open(proxy_file, 'w') as f:
+                f.write("# Add your proxies here - one per line\n")
+                f.write("# Format: ip:port or ip:port:user:pass\n")
+            self.proxies = []
+            return
         
-        self.all_proxies = list(set(harvested))
-        print(f"{Fore.GREEN}[✅] Harvested {len(self.all_proxies)} unique proxies      ")
-        return self.all_proxies
-    
-    def test_proxy(self, proxy):
-        """Test if a proxy works - FAST MODE"""
-        try:
-            proxy_parts = proxy.split(':')
-            if len(proxy_parts) != 2:
-                return False
-            
-            ip, port = proxy_parts
-            port = int(port)
-            
-            for test_url in self.test_urls:
-                try:
-                    proxies = {
-                        'http': f'http://{proxy}',
-                        'https': f'http://{proxy}'
-                    }
-                    
-                    response = requests.get(
-                        test_url, 
-                        proxies=proxies, 
-                        timeout=PROXY_TEST_TIMEOUT,
-                        verify=False
-                    )
-                    
-                    if response.status_code == 200:
-                        return True
-                        
-                except:
-                    continue
-            
-            return False
-            
-        except:
-            return False
-    
-    def test_proxies_concurrent(self):
-        """Test proxies concurrently - FAST MODE with animation"""
-        print(f"{Fore.CYAN}[🔍] Testing {min(len(self.all_proxies), MAX_PROXIES_TO_TEST)} proxies...")
+        with open(proxy_file, 'r') as f:
+            lines = f.readlines()
         
-        to_test = self.all_proxies[:MAX_PROXIES_TO_TEST]
-        self.working_proxies = []
-        tested = 0
-        found = 0
+        for line in lines:
+            proxy = line.strip()
+            if proxy and not proxy.startswith('#'):
+                self.proxies.append(proxy)
         
-        def test_worker(proxy):
-            nonlocal tested, found
-            if self.test_proxy(proxy):
-                with self.lock:
-                    self.working_proxies.append(proxy)
-                    found += 1
+        print(f"{Fore.GREEN}[✅] Loaded {len(self.proxies)} proxies from proxies.txt")
         
-        threads = []
-        for proxy in to_test:
-            thread = threading.Thread(target=test_worker, args=(proxy,))
-            thread.start()
-            threads.append(thread)
-            tested += 1
-            
-            # Show animation
-            frame = SPINNER_FRAMES[tested % len(SPINNER_FRAMES)]
-            print(f"{Fore.YELLOW}{frame} Testing proxies... Found: {found}", end="\r")
-            
-            if len(threads) >= 100:  # 100 concurrent threads
-                for t in threads:
-                    t.join()
-                threads = []
-        
-        # Wait for remaining threads
-        for t in threads:
-            t.join()
-        
-        print(f"{Fore.GREEN}[✅] Found {len(self.working_proxies)} working proxies      ")
-        return self.working_proxies
+        if len(self.proxies) == 0:
+            print(f"{Fore.YELLOW}[⚠️] No proxies found in proxies.txt")
     
     def get_proxy(self):
-        """Get next working proxy in rotation with failover"""
+        """Get next proxy in rotation - FAST, NO TESTING"""
         with self.lock:
-            if not self.working_proxies:
+            if not self.proxies:
                 return None
             
-            # Try up to 3 times to get a working proxy
-            for attempt in range(3):
-                if self.current_index >= len(self.working_proxies):
-                    self.current_index = 0
-                
-                proxy = self.working_proxies[self.current_index]
-                self.current_index += 1
-                
-                # Quick test before returning
-                if self.test_proxy(proxy):
-                    return proxy
-                else:
-                    # Remove dead proxy
-                    self.working_proxies.remove(proxy)
-                    print(f"{Fore.RED}[❌] Proxy died, removed from pool: {proxy}")
+            if self.current_index >= len(self.proxies):
+                self.current_index = 0
             
-            return None
+            proxy = self.proxies[self.current_index]
+            self.current_index += 1
+            return proxy
+    
+    def get_proxy_count(self):
+        return len(self.proxies)
 
 # ========== EMAIL SENDER WITH PROXY ROTATION ==========
 class EmailSender:
@@ -305,8 +184,31 @@ class EmailSender:
         self.success_count = 0
         self.fail_count = 0
     
+    def parse_proxy(self, proxy_str):
+        """Parse proxy string - supports ip:port and ip:port:user:pass"""
+        parts = proxy_str.split(':')
+        
+        if len(parts) == 2:
+            # ip:port format
+            return {
+                'ip': parts[0],
+                'port': int(parts[1]),
+                'username': None,
+                'password': None
+            }
+        elif len(parts) == 4:
+            # ip:port:user:pass format
+            return {
+                'ip': parts[0],
+                'port': int(parts[1]),
+                'username': parts[2],
+                'password': parts[3]
+            }
+        else:
+            return None
+    
     def send_email(self, to_email, subject, body, use_proxy=True):
-        """Send email with optional proxy rotation and failover"""
+        """Send email with proxy rotation - FAST FAILOVER"""
         
         # Get next email account
         account = next(self.account_cycle)
@@ -314,20 +216,39 @@ class EmailSender:
         # Save original socket
         original_socket = socket.socket
         
-        # Try with different proxies if first fails
+        # Try up to 3 different proxies if first fails
         max_retries = 3
+        
         for retry in range(max_retries):
+            proxy_info = None
+            proxy_str = "No proxy"
+            
             try:
-                # Set up proxy if enabled and available
+                # Set up proxy if enabled
                 if use_proxy and self.proxy_manager:
-                    proxy = self.proxy_manager.get_proxy()
-                    if proxy:
-                        proxy_parts = proxy.split(':')
-                        proxy_ip, proxy_port = proxy_parts[0], int(proxy_parts[1])
+                    proxy_str = self.proxy_manager.get_proxy()
+                    if proxy_str:
+                        proxy_info = self.parse_proxy(proxy_str)
                         
-                        # Set SOCKS proxy
-                        socks.set_default_proxy(socks.SOCKS5, proxy_ip, proxy_port)
-                        socket.socket = socks.socksocket
+                        if proxy_info:
+                            if proxy_info['username'] and proxy_info['password']:
+                                # Authenticated proxy
+                                socks.set_default_proxy(
+                                    socks.SOCKS5, 
+                                    proxy_info['ip'], 
+                                    proxy_info['port'],
+                                    True,
+                                    proxy_info['username'],
+                                    proxy_info['password']
+                                )
+                            else:
+                                # Regular proxy
+                                socks.set_default_proxy(
+                                    socks.SOCKS5, 
+                                    proxy_info['ip'], 
+                                    proxy_info['port']
+                                )
+                            socket.socket = socks.socksocket
                 
                 # Create message
                 msg = MIMEMultipart()
@@ -335,7 +256,7 @@ class EmailSender:
                 msg['To'] = to_email
                 msg['Subject'] = subject
                 
-                # Add random headers to look legit
+                # Add random headers
                 msg['X-Mailer'] = f'Microsoft Outlook 16.0.{random.randint(1000,9999)}'
                 msg['X-Priority'] = str(random.randint(1, 3))
                 msg['Message-ID'] = f"<{random.randint(1000000,9999999)}.{datetime.now().timestamp()}@{account['email'].split('@')[1]}>"
@@ -358,10 +279,14 @@ class EmailSender:
                 self.sent_count += 1
                 self.success_count += 1
                 
+                # Show which proxy worked
+                if proxy_info:
+                    print(f"{Fore.GREEN}✓ Used proxy: {proxy_info['ip']}:{proxy_info['port']}")
+                
                 return True
                 
             except Exception as e:
-                # Reset socket on error
+                # Reset socket
                 try:
                     socks.set_default_proxy()
                     socket.socket = original_socket
@@ -371,10 +296,11 @@ class EmailSender:
                 # If this was the last retry, fail
                 if retry == max_retries - 1:
                     self.fail_count += 1
+                    print(f"{Fore.RED}✗ Failed after {max_retries} proxies: {str(e)[:50]}")
                     return False
                 
-                # Otherwise try again with different proxy
-                time.sleep(1)
+                # Try next proxy immediately
+                continue
         
         return False
 
@@ -610,42 +536,33 @@ class ZiskyWhatsAppBan:
         self.email_sender = None
         self.running = True
         
-        # Check if USE_PROXIES exists in main.py
+        # Initialize proxy manager if enabled
         try:
             if USE_PROXIES:
                 self.proxy_manager = ProxyManager()
         except NameError:
-            print(f"{Fore.YELLOW}[⚠️] USE_PROXIES not defined in main.py. Using default: True")
+            print(f"{Fore.YELLOW}[⚠️] USE_PROXIES not defined. Using default: True")
             self.proxy_manager = ProxyManager()
         
         self.email_sender = EmailSender(self.proxy_manager)
     
     def initialize(self):
-        """Initialize tool - harvest and test proxies if enabled"""
+        """Initialize tool"""
         clear()
         print(BANNER)
         print(f"{Fore.CYAN}┌─────────────────────────────────────┐")
         print(f"{Fore.CYAN}│  Initializing Zisky Engine...       │")
         print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}\n")
         
-        # Check if USE_PROXIES exists
-        use_proxies = True
-        try:
-            use_proxies = USE_PROXIES
-        except NameError:
-            use_proxies = True
-        
-        if use_proxies and self.proxy_manager:
+        # Show proxy status
+        if self.proxy_manager:
+            proxy_count = self.proxy_manager.get_proxy_count()
             print(f"{Fore.CYAN}[🌐] Proxy rotation: ENABLED")
-            self.proxy_manager.harvest_proxies()
-            self.proxy_manager.test_proxies_concurrent()
-            
-            if len(self.proxy_manager.working_proxies) == 0:
-                print(f"{Fore.YELLOW}[⚠️] No working proxies found! Continuing without proxies...")
-                self.proxy_manager = None
+            print(f"{Fore.CYAN}[📊] Proxies loaded: {proxy_count}")
+            if proxy_count == 0:
+                print(f"{Fore.YELLOW}[⚠️] No proxies in proxies.txt - will use direct connection")
         else:
             print(f"{Fore.YELLOW}[⚠️] Proxy rotation: DISABLED")
-            self.proxy_manager = None
         
         print(f"{Fore.GREEN}[✅] Email accounts loaded: {len(EMAIL_ACCOUNTS)}")
         print(f"{Fore.GREEN}[✅] WhatsApp support emails: {len(SUPPORT_EMAILS)}")
@@ -667,9 +584,9 @@ class ZiskyWhatsAppBan:
         
         # Status bar
         print(f"{Fore.CYAN}┌─────────────────────────────────────┐")
-        if self.proxy_manager and hasattr(self.proxy_manager, 'working_proxies'):
-            print(f"{Fore.CYAN}│  Proxies: {len(self.proxy_manager.working_proxies)} working{' ' * (20 - len(str(len(self.proxy_manager.working_proxies))))}│")
-        print(f"{Fore.CYAN}│  Emails: {self.email_sender.sent_count} sent ({self.email_sender.success_count} ok, {self.email_sender.fail_count} failed){' ' * (5)}│")
+        if self.proxy_manager:
+            print(f"{Fore.CYAN}│  Proxies: {self.proxy_manager.get_proxy_count()} available{' ' * (20 - len(str(self.proxy_manager.get_proxy_count())))}│")
+        print(f"{Fore.CYAN}│  Emails: {self.email_sender.sent_count} sent ({self.email_sender.success_count} ok, {self.email_sender.fail_count} failed)│")
         print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}")
         print()
     
@@ -683,9 +600,9 @@ class ZiskyWhatsAppBan:
                 print(f"{Fore.RED}❌ Invalid format! Must start with + and contain 10-15 digits.")
     
     def send_mass_emails(self, phone, template_func, count=30):
-        """Send multiple emails with different templates and animations"""
+        """Send multiple emails with proxy rotation"""
         
-        # Get count from main.py if available
+        # Get count from main.py
         try:
             count = EMAILS_PER_TARGET
         except NameError:
@@ -702,11 +619,11 @@ class ZiskyWhatsAppBan:
             # Rotate through support emails
             to_email = random.choice(SUPPORT_EMAILS)
             
-            # Generate unique subject with random reference
+            # Generate unique subject
             ref = random.randint(10000, 99999)
             subject = f"Case #{ref}: WhatsApp Report - {phone[:5]}***{phone[-3:]}"
             
-            # Get template (slightly different each time)
+            # Get template
             body = template_func(phone)
             
             # Check if USE_PROXIES exists
@@ -716,11 +633,9 @@ class ZiskyWhatsAppBan:
             except NameError:
                 use_proxy = True
             
-            # Animation while sending
-            for frame in range(10):
-                spinner = SPINNER_FRAMES[frame % len(SPINNER_FRAMES)]
-                print(f"{Fore.YELLOW}{spinner} Sending email {i+1}/{count}...", end="\r")
-                time.sleep(0.05)
+            # Show sending animation
+            spinner = SPINNER_FRAMES[i % len(SPINNER_FRAMES)]
+            print(f"{Fore.YELLOW}{spinner} Sending email {i+1}/{count}...", end="\r")
             
             # Send email
             result = self.email_sender.send_email(to_email, subject, body, use_proxy=use_proxy)
@@ -732,29 +647,24 @@ class ZiskyWhatsAppBan:
                 fail += 1
                 status = f"{Fore.RED}❌"
             
-            # Show progress bar
+            # Show progress
             progress = (i + 1) / count * 100
             bar_length = 30
             filled = int(bar_length * (i + 1) / count)
             bar = '█' * filled + '░' * (bar_length - filled)
             
-            print(f"{Fore.CYAN}[{bar}] {progress:.1f}% {status} Sent: {success} Failed: {fail}", end="\r")
+            print(f"{Fore.CYAN}[{bar}] {progress:.1f}% {status} Success: {success} Failed: {fail}", end="\r")
             
-            # Random delay
+            # Delay between emails
             try:
                 min_delay = MIN_DELAY_SECONDS
                 max_delay = MAX_DELAY_SECONDS
             except NameError:
-                min_delay = 20
-                max_delay = 45
+                min_delay = 5
+                max_delay = 10
             
             delay = random.uniform(min_delay, max_delay)
-            
-            # Countdown animation during delay
-            for sec in range(int(delay), 0, -1):
-                spinner = SPINNER_FRAMES[sec % len(SPINNER_FRAMES)]
-                print(f"{Fore.CYAN}[{bar}] {progress:.1f}% {status} Next email in {sec}s {spinner}", end="\r")
-                time.sleep(1)
+            time.sleep(delay)
         
         print(f"\n\n{Fore.GREEN}┌─────────────────────────────────────┐")
         print(f"{Fore.GREEN}│  Emails sent: {success}/{count}          │")
@@ -767,16 +677,16 @@ class ZiskyWhatsAppBan:
         
         phone = self.get_phone_number()
         
-        # Optional: Check if number exists on WhatsApp
+        # Check number status
         print(f"\n{Fore.CYAN}[🔍] Checking number status...")
         exists = check_whatsapp_number(phone)
         
         if exists is False:
-            print(f"{Fore.YELLOW}[⚠️] Number may not be registered on WhatsApp. Continue anyway? (y/n): ")
+            print(f"{Fore.YELLOW}[⚠️] Number may not be registered on WhatsApp. Continue? (y/n): ")
             if input().lower() != 'y':
                 return
         
-        # Map report types to template functions
+        # Map report types
         templates = {
             'temp': ReportTemplates.get_unban_temp,
             'perm': ReportTemplates.get_unban_perm,
@@ -795,7 +705,7 @@ class ZiskyWhatsAppBan:
         # Confirm
         print(f"\n{Fore.YELLOW}┌─────────────────────────────────────┐")
         print(f"{Fore.YELLOW}│  Ready to send {email_count} emails     │")
-        print(f"{Fore.YELLOW}│  Target: {phone}{' ' * (24 - len(phone))}│")
+        print(f"{Fore.YELLOW}│  Target: {phone}                      │")
         print(f"{Fore.YELLOW}└─────────────────────────────────────┘{Style.RESET_ALL}\n")
         confirm = input(f"{Fore.YELLOW}Continue? (y/n): {Style.RESET_ALL}").lower()
         
@@ -813,9 +723,9 @@ class ZiskyWhatsAppBan:
             print(f"\n{Fore.GREEN}╔═══════════════════════════════════════╗")
             print(f"{Fore.GREEN}║         REPORT COMPLETE!             ║")
             print(f"{Fore.GREEN}╠═══════════════════════════════════════╣")
-            print(f"{Fore.GREEN}║ Target: {phone}{' ' * (26 - len(phone))}║")
-            print(f"{Fore.GREEN}║ Emails sent: {success}/{total}{' ' * (19 - len(str(success)+str(total)))}║")
-            print(f"{Fore.GREEN}║ Success rate: {rate:.1f}%{' ' * (18 - len(str(rate)))}║")
+            print(f"{Fore.GREEN}║ Target: {phone}                      ║")
+            print(f"{Fore.GREEN}║ Emails sent: {success}/{total}        ║")
+            print(f"{Fore.GREEN}║ Success rate: {rate:.1f}%            ║")
             print(f"{Fore.GREEN}╠═══════════════════════════════════════╣")
             
             if rate > 70:
@@ -841,8 +751,8 @@ class ZiskyWhatsAppBan:
         
         print(f"\n{Fore.GREEN}📧 Support Emails: {len(SUPPORT_EMAILS)}")
         
-        if self.proxy_manager and hasattr(self.proxy_manager, 'working_proxies'):
-            print(f"\n{Fore.GREEN}🌐 Proxies: {len(self.proxy_manager.working_proxies)} working")
+        if self.proxy_manager:
+            print(f"\n{Fore.GREEN}🌐 Proxies: {self.proxy_manager.get_proxy_count()} available")
         else:
             print(f"\n{Fore.YELLOW}🌐 Proxies: DISABLED")
         
@@ -860,7 +770,7 @@ class ZiskyWhatsAppBan:
             print(f"  Proxy rotation: {USE_PROXIES}")
         except NameError:
             print(f"  Emails per target: 30 (default)")
-            print(f"  Delay range: 20-45s (default)")
+            print(f"  Delay range: 5-10s (default)")
             print(f"  Proxy rotation: True (default)")
         
         input(f"\n{Fore.YELLOW}Press Enter to continue...")
