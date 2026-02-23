@@ -53,7 +53,7 @@ WHATSAPP_PHONE_NUMBER_ID = "669101662914614"
 EMAILS_PER_TARGET = 30           # Number of emails to send per target
 MIN_DELAY_SECONDS = 2            # Minimum delay between emails
 MAX_DELAY_SECONDS = 5            # Maximum delay between emails
-USE_PROXIES = FALSE             # Set to False to disable proxies
+USE_PROXIES = False             # Set to False to disable proxies
 
 # ========== PROXY SETTINGS ==========
 # These settings are now handled by the new proxy system
