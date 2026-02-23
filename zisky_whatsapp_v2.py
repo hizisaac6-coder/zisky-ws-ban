@@ -142,6 +142,7 @@ class ProxyManager:
             with open(proxy_file, 'w') as f:
                 f.write("# Add your proxies here - one per line\n")
                 f.write("# Format: ip:port or ip:port:user:pass\n")
+                f.write("# For IPv6, use [ipv6]:port format\n")
             self.proxies = []
             return
         
@@ -185,7 +186,53 @@ class EmailSender:
         self.fail_count = 0
     
     def parse_proxy(self, proxy_str):
-        """Parse proxy string - supports ip:port and ip:port:user:pass"""
+        """Parse proxy string - supports IPv4, IPv6, and authenticated proxies"""
+        proxy_str = proxy_str.strip()
+        
+        # Check for IPv6 with brackets [2001:db8::1]:port
+        ipv6_match = re.match(r'^\[([a-fA-F0-9:]+)\]:(\d+)(?::(.+))?$', proxy_str)
+        if ipv6_match:
+            ip = ipv6_match.group(1)
+            port = int(ipv6_match.group(2))
+            auth = ipv6_match.group(3)
+            
+            if auth and ':' in auth:
+                username, password = auth.split(':', 1)
+                return {
+                    'ip': ip,
+                    'port': port,
+                    'username': username,
+                    'password': password,
+                    'is_ipv6': True
+                }
+            else:
+                return {
+                    'ip': ip,
+                    'port': port,
+                    'username': None,
+                    'password': None,
+                    'is_ipv6': True
+                }
+        
+        # Check for IPv6 without brackets (less common, but handle it)
+        if proxy_str.count(':') > 1 and '[' not in proxy_str:
+            # This is likely an IPv6 address without brackets - try to parse last part as port
+            parts = proxy_str.split(':')
+            if len(parts) >= 2:
+                # Last part might be port
+                possible_port = parts[-1]
+                if possible_port.isdigit():
+                    ip = ':'.join(parts[:-1])
+                    port = int(possible_port)
+                    return {
+                        'ip': ip,
+                        'port': port,
+                        'username': None,
+                        'password': None,
+                        'is_ipv6': True
+                    }
+        
+        # Handle IPv4 with possible auth
         parts = proxy_str.split(':')
         
         if len(parts) == 2:
@@ -194,7 +241,8 @@ class EmailSender:
                 'ip': parts[0],
                 'port': int(parts[1]),
                 'username': None,
-                'password': None
+                'password': None,
+                'is_ipv6': False
             }
         elif len(parts) == 4:
             # ip:port:user:pass format
@@ -202,13 +250,58 @@ class EmailSender:
                 'ip': parts[0],
                 'port': int(parts[1]),
                 'username': parts[2],
-                'password': parts[3]
+                'password': parts[3],
+                'is_ipv6': False
             }
-        else:
-            return None
+        
+        return None
+    
+    def setup_socks_proxy(self, proxy_info):
+        """Setup SOCKS proxy for either IPv4 or IPv6"""
+        try:
+            if proxy_info['username'] and proxy_info['password']:
+                # Authenticated proxy
+                socks.set_default_proxy(
+                    socks.SOCKS5, 
+                    proxy_info['ip'], 
+                    proxy_info['port'],
+                    True,
+                    proxy_info['username'],
+                    proxy_info['password']
+                )
+            else:
+                # Regular proxy
+                socks.set_default_proxy(
+                    socks.SOCKS5, 
+                    proxy_info['ip'], 
+                    proxy_info['port']
+                )
+            
+            # Replace socket with socks socket
+            socket.socket = socks.socksocket
+            
+            # For IPv6, we need to set additional socket options
+            if proxy_info.get('is_ipv6', False):
+                # Create a test socket to verify IPv6 works
+                test_sock = socks.socksocket()
+                test_sock.settimeout(5)
+                try:
+                    # Just test the proxy by creating a connection
+                    test_sock.connect(('8.8.8.8', 53))
+                    test_sock.close()
+                except Exception as e:
+                    # If IPv6 fails, reset and raise exception
+                    socks.set_default_proxy()
+                    socket.socket = socket.socket
+                    raise Exception(f"IPv6 proxy connection failed: {e}")
+            
+            return True
+        except Exception as e:
+            print(f"{Fore.YELLOW}[⚠️] Proxy setup failed: {e}")
+            return False
     
     def send_email(self, to_email, subject, body, use_proxy=True):
-        """Send email with proxy rotation - FAST FAILOVER"""
+        """Send email with proxy rotation - Supports IPv4 & IPv6"""
         
         # Get next email account
         account = next(self.account_cycle)
@@ -231,24 +324,9 @@ class EmailSender:
                         proxy_info = self.parse_proxy(proxy_str)
                         
                         if proxy_info:
-                            if proxy_info['username'] and proxy_info['password']:
-                                # Authenticated proxy
-                                socks.set_default_proxy(
-                                    socks.SOCKS5, 
-                                    proxy_info['ip'], 
-                                    proxy_info['port'],
-                                    True,
-                                    proxy_info['username'],
-                                    proxy_info['password']
-                                )
-                            else:
-                                # Regular proxy
-                                socks.set_default_proxy(
-                                    socks.SOCKS5, 
-                                    proxy_info['ip'], 
-                                    proxy_info['port']
-                                )
-                            socket.socket = socks.socksocket
+                            # Setup proxy connection
+                            if not self.setup_socks_proxy(proxy_info):
+                                continue
                 
                 # Create message
                 msg = MIMEMultipart()
@@ -281,7 +359,8 @@ class EmailSender:
                 
                 # Show which proxy worked
                 if proxy_info:
-                    print(f"{Fore.GREEN}✓ Used proxy: {proxy_info['ip']}:{proxy_info['port']}")
+                    proxy_type = "IPv6" if proxy_info.get('is_ipv6', False) else "IPv4"
+                    print(f"{Fore.GREEN}✓ Used {proxy_type} proxy: {proxy_info['ip']}:{proxy_info['port']}")
                 
                 return True
                 
@@ -296,7 +375,8 @@ class EmailSender:
                 # If this was the last retry, fail
                 if retry == max_retries - 1:
                     self.fail_count += 1
-                    print(f"{Fore.RED}✗ Failed after {max_retries} proxies: {str(e)[:50]}")
+                    error_msg = str(e)[:50]
+                    print(f"{Fore.RED}✗ Failed after {max_retries} proxies: {error_msg}")
                     return False
                 
                 # Try next proxy immediately
