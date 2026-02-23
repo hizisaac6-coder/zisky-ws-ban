@@ -59,6 +59,10 @@ except ImportError:
 # Initialize colorama
 init(autoreset=True)
 
+# Animation frames
+SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+PROXY_FRAMES = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘']
+
 # ========== ZISKY BANNER ==========
 BANNER = f"""
 {Fore.RED}███████╗██╗███████╗██╗  ██╗██╗   ██╗
@@ -153,13 +157,15 @@ class ProxyManager:
         ]
     
     def harvest_proxies(self):
-        """Harvest proxies from all sources"""
+        """Harvest proxies from all sources with animation"""
         print(f"{Fore.CYAN}[🌐] Harvesting proxies from {len(self.proxy_sources)} sources...")
         
         harvested = []
         for i, source in enumerate(self.proxy_sources):
             try:
-                print(f"{Fore.YELLOW}[{i+1}/{len(self.proxy_sources)}] Fetching...", end="\r")
+                # Animation
+                frame = PROXY_FRAMES[i % len(PROXY_FRAMES)]
+                print(f"{Fore.YELLOW}{frame} Fetching source {i+1}/{len(self.proxy_sources)}...", end="\r")
                 
                 headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
                 response = requests.get(source, headers=headers, timeout=15, verify=False)
@@ -182,7 +188,7 @@ class ProxyManager:
                                 if ip and port and re.match(r'^\d+\.\d+\.\d+\.\d+$', ip):
                                     harvested.append(f"{ip}:{port}")
                 
-                time.sleep(0.5)
+                time.sleep(0.3)
                 
             except Exception as e:
                 continue
@@ -192,84 +198,102 @@ class ProxyManager:
         return self.all_proxies
     
     def test_proxy(self, proxy):
-    """Test if a proxy works - FAST MODE"""
-    try:
-        proxy_parts = proxy.split(':')
-        if len(proxy_parts) != 2:
-            return False
-        
-        ip, port = proxy_parts
-        port = int(port)
-        
-        for test_url in self.test_urls:
-            try:
-                proxies = {
-                    'http': f'http://{proxy}',
-                    'https': f'http://{proxy}'
-                }
-                
-                response = requests.get(
-                    test_url, 
-                    proxies=proxies, 
-                    timeout=5,  # ← REDUCED from 10 to 5 seconds
-                    verify=False
-                )
-                
-                if response.status_code == 200:
-                    return True
+        """Test if a proxy works - FAST MODE"""
+        try:
+            proxy_parts = proxy.split(':')
+            if len(proxy_parts) != 2:
+                return False
+            
+            ip, port = proxy_parts
+            port = int(port)
+            
+            for test_url in self.test_urls:
+                try:
+                    proxies = {
+                        'http': f'http://{proxy}',
+                        'https': f'http://{proxy}'
+                    }
                     
-            except:
-                continue
-        
-        return False
-        
-    except:
-        return False
+                    response = requests.get(
+                        test_url, 
+                        proxies=proxies, 
+                        timeout=PROXY_TEST_TIMEOUT,
+                        verify=False
+                    )
+                    
+                    if response.status_code == 200:
+                        return True
+                        
+                except:
+                    continue
+            
+            return False
+            
+        except:
+            return False
     
     def test_proxies_concurrent(self):
-    """Test proxies concurrently - FAST MODE"""
-    print(f"{Fore.CYAN}[🔍] Testing {min(len(self.all_proxies), MAX_PROXIES_TO_TEST)} proxies...")
-    
-    to_test = self.all_proxies[:MAX_PROXIES_TO_TEST]
-    self.working_proxies = []
-    
-    def test_worker(proxy):
-        if self.test_proxy(proxy):
-            with self.lock:
-                self.working_proxies.append(proxy)
-                print(f"{Fore.GREEN}[✅] Working: {proxy} ({len(self.working_proxies)})", end="\r")
-    
-    threads = []
-    for proxy in to_test:
-        thread = threading.Thread(target=test_worker, args=(proxy,))
-        thread.start()
-        threads.append(thread)
+        """Test proxies concurrently - FAST MODE with animation"""
+        print(f"{Fore.CYAN}[🔍] Testing {min(len(self.all_proxies), MAX_PROXIES_TO_TEST)} proxies...")
         
-        # INCREASE THIS NUMBER FOR FASTER TESTING
-        if len(threads) >= 100:  # ← Changed from 30 to 100
-            for t in threads:
-                t.join()
-            threads = []
-    
-    # Wait for remaining threads
-    for t in threads:
-        t.join()
-    
-    print(f"\n{Fore.GREEN}[✅] Found {len(self.working_proxies)} working proxies")
-    return self.working_proxies
+        to_test = self.all_proxies[:MAX_PROXIES_TO_TEST]
+        self.working_proxies = []
+        tested = 0
+        found = 0
+        
+        def test_worker(proxy):
+            nonlocal tested, found
+            if self.test_proxy(proxy):
+                with self.lock:
+                    self.working_proxies.append(proxy)
+                    found += 1
+        
+        threads = []
+        for proxy in to_test:
+            thread = threading.Thread(target=test_worker, args=(proxy,))
+            thread.start()
+            threads.append(thread)
+            tested += 1
+            
+            # Show animation
+            frame = SPINNER_FRAMES[tested % len(SPINNER_FRAMES)]
+            print(f"{Fore.YELLOW}{frame} Testing proxies... Found: {found}", end="\r")
+            
+            if len(threads) >= 100:  # 100 concurrent threads
+                for t in threads:
+                    t.join()
+                threads = []
+        
+        # Wait for remaining threads
+        for t in threads:
+            t.join()
+        
+        print(f"{Fore.GREEN}[✅] Found {len(self.working_proxies)} working proxies      ")
+        return self.working_proxies
     
     def get_proxy(self):
-        """Get next working proxy in rotation"""
+        """Get next working proxy in rotation with failover"""
         with self.lock:
             if not self.working_proxies:
                 return None
             
-            if self.current_index >= len(self.working_proxies):
-                self.current_index = 0
+            # Try up to 3 times to get a working proxy
+            for attempt in range(3):
+                if self.current_index >= len(self.working_proxies):
+                    self.current_index = 0
+                
+                proxy = self.working_proxies[self.current_index]
+                self.current_index += 1
+                
+                # Quick test before returning
+                if self.test_proxy(proxy):
+                    return proxy
+                else:
+                    # Remove dead proxy
+                    self.working_proxies.remove(proxy)
+                    print(f"{Fore.RED}[❌] Proxy died, removed from pool: {proxy}")
             
-            proxy = self.working_proxies[self.current_index]
-            self.current_index += 1
-            return proxy
+            return None
 
 # ========== EMAIL SENDER WITH PROXY ROTATION ==========
 class EmailSender:
@@ -279,9 +303,10 @@ class EmailSender:
         self.account_cycle = cycle(EMAIL_ACCOUNTS)
         self.sent_count = 0
         self.success_count = 0
+        self.fail_count = 0
     
     def send_email(self, to_email, subject, body, use_proxy=True):
-        """Send email with optional proxy rotation"""
+        """Send email with optional proxy rotation and failover"""
         
         # Get next email account
         account = next(self.account_cycle)
@@ -289,58 +314,69 @@ class EmailSender:
         # Save original socket
         original_socket = socket.socket
         
-        try:
-            # Set up proxy if enabled and available
-            if use_proxy and self.proxy_manager:
-                proxy = self.proxy_manager.get_proxy()
-                if proxy:
-                    proxy_parts = proxy.split(':')
-                    proxy_ip, proxy_port = proxy_parts[0], int(proxy_parts[1])
-                    
-                    # Set SOCKS proxy
-                    socks.set_default_proxy(socks.SOCKS5, proxy_ip, proxy_port)
-                    socket.socket = socks.socksocket
-            
-            # Create message
-            msg = MIMEMultipart()
-            msg['From'] = account['email']
-            msg['To'] = to_email
-            msg['Subject'] = subject
-            
-            # Add random headers to look legit
-            msg['X-Mailer'] = f'Microsoft Outlook 16.0.{random.randint(1000,9999)}'
-            msg['X-Priority'] = str(random.randint(1, 3))
-            msg['Message-ID'] = f"<{random.randint(1000000,9999999)}.{datetime.now().timestamp()}@{account['email'].split('@')[1]}>"
-            
-            msg.attach(MIMEText(body, 'plain'))
-            
-            # Send email
-            context = ssl.create_default_context()
-            
-            with smtplib.SMTP(account['smtp_server'], account['smtp_port'], timeout=30) as server:
-                server.starttls(context=context)
-                server.login(account['email'], account['password'])
-                server.send_message(msg)
-            
-            # Reset socket
-            if use_proxy and self.proxy_manager:
-                socks.set_default_proxy()
-                socket.socket = original_socket
-            
-            self.sent_count += 1
-            self.success_count += 1
-            
-            return True
-            
-        except Exception as e:
-            # Reset socket on error
+        # Try with different proxies if first fails
+        max_retries = 3
+        for retry in range(max_retries):
             try:
-                socks.set_default_proxy()
-                socket.socket = original_socket
-            except:
-                pass
-            
-            return False
+                # Set up proxy if enabled and available
+                if use_proxy and self.proxy_manager:
+                    proxy = self.proxy_manager.get_proxy()
+                    if proxy:
+                        proxy_parts = proxy.split(':')
+                        proxy_ip, proxy_port = proxy_parts[0], int(proxy_parts[1])
+                        
+                        # Set SOCKS proxy
+                        socks.set_default_proxy(socks.SOCKS5, proxy_ip, proxy_port)
+                        socket.socket = socks.socksocket
+                
+                # Create message
+                msg = MIMEMultipart()
+                msg['From'] = account['email']
+                msg['To'] = to_email
+                msg['Subject'] = subject
+                
+                # Add random headers to look legit
+                msg['X-Mailer'] = f'Microsoft Outlook 16.0.{random.randint(1000,9999)}'
+                msg['X-Priority'] = str(random.randint(1, 3))
+                msg['Message-ID'] = f"<{random.randint(1000000,9999999)}.{datetime.now().timestamp()}@{account['email'].split('@')[1]}>"
+                
+                msg.attach(MIMEText(body, 'plain'))
+                
+                # Send email
+                context = ssl.create_default_context()
+                
+                with smtplib.SMTP(account['smtp_server'], account['smtp_port'], timeout=30) as server:
+                    server.starttls(context=context)
+                    server.login(account['email'], account['password'])
+                    server.send_message(msg)
+                
+                # Reset socket
+                if use_proxy and self.proxy_manager:
+                    socks.set_default_proxy()
+                    socket.socket = original_socket
+                
+                self.sent_count += 1
+                self.success_count += 1
+                
+                return True
+                
+            except Exception as e:
+                # Reset socket on error
+                try:
+                    socks.set_default_proxy()
+                    socket.socket = original_socket
+                except:
+                    pass
+                
+                # If this was the last retry, fail
+                if retry == max_retries - 1:
+                    self.fail_count += 1
+                    return False
+                
+                # Otherwise try again with different proxy
+                time.sleep(1)
+        
+        return False
 
 # ========== WHATSAPP API FUNCTIONS ==========
 def check_whatsapp_number(phone):
@@ -545,7 +581,7 @@ def login():
     print(f"{Fore.CYAN}┌─────────────────────────────────────┐")
     print(f"{Fore.CYAN}│           SYSTEM LOGIN              │")
     print(f"{Fore.CYAN}├─────────────────────────────────────┤")
-    print(f"{Fore.CYAN}│  Default: admin / admins            │")
+    print(f"{Fore.CYAN}│  Default: ziskyhimself / admins     │")
     print(f"{Fore.CYAN}│  (Change in main.py)                │")
     print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}\n")
     
@@ -633,7 +669,7 @@ class ZiskyWhatsAppBan:
         print(f"{Fore.CYAN}┌─────────────────────────────────────┐")
         if self.proxy_manager and hasattr(self.proxy_manager, 'working_proxies'):
             print(f"{Fore.CYAN}│  Proxies: {len(self.proxy_manager.working_proxies)} working{' ' * (20 - len(str(len(self.proxy_manager.working_proxies))))}│")
-        print(f"{Fore.CYAN}│  Emails sent: {self.email_sender.sent_count} ({self.email_sender.success_count} ok){' ' * (12)}│")
+        print(f"{Fore.CYAN}│  Emails: {self.email_sender.sent_count} sent ({self.email_sender.success_count} ok, {self.email_sender.fail_count} failed){' ' * (5)}│")
         print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}")
         print()
     
@@ -647,7 +683,7 @@ class ZiskyWhatsAppBan:
                 print(f"{Fore.RED}❌ Invalid format! Must start with + and contain 10-15 digits.")
     
     def send_mass_emails(self, phone, template_func, count=30):
-        """Send multiple emails with different templates"""
+        """Send multiple emails with different templates and animations"""
         
         # Get count from main.py if available
         try:
@@ -660,6 +696,8 @@ class ZiskyWhatsAppBan:
         print(f"{Fore.CYAN}└─────────────────────────────────────┘{Style.RESET_ALL}\n")
         
         success = 0
+        fail = 0
+        
         for i in range(count):
             # Rotate through support emails
             to_email = random.choice(SUPPORT_EMAILS)
@@ -678,20 +716,29 @@ class ZiskyWhatsAppBan:
             except NameError:
                 use_proxy = True
             
+            # Animation while sending
+            for frame in range(10):
+                spinner = SPINNER_FRAMES[frame % len(SPINNER_FRAMES)]
+                print(f"{Fore.YELLOW}{spinner} Sending email {i+1}/{count}...", end="\r")
+                time.sleep(0.05)
+            
             # Send email
             result = self.email_sender.send_email(to_email, subject, body, use_proxy=use_proxy)
             
             if result:
                 success += 1
+                status = f"{Fore.GREEN}✅"
+            else:
+                fail += 1
+                status = f"{Fore.RED}❌"
             
-            # Show progress
+            # Show progress bar
             progress = (i + 1) / count * 100
             bar_length = 30
             filled = int(bar_length * (i + 1) / count)
             bar = '█' * filled + '░' * (bar_length - filled)
             
-            status = f"{Fore.GREEN}✅" if result else f"{Fore.RED}❌"
-            print(f"{Fore.CYAN}[{bar}] {progress:.1f}% {status}", end="\r")
+            print(f"{Fore.CYAN}[{bar}] {progress:.1f}% {status} Sent: {success} Failed: {fail}", end="\r")
             
             # Random delay
             try:
@@ -702,10 +749,16 @@ class ZiskyWhatsAppBan:
                 max_delay = 45
             
             delay = random.uniform(min_delay, max_delay)
-            time.sleep(delay)
+            
+            # Countdown animation during delay
+            for sec in range(int(delay), 0, -1):
+                spinner = SPINNER_FRAMES[sec % len(SPINNER_FRAMES)]
+                print(f"{Fore.CYAN}[{bar}] {progress:.1f}% {status} Next email in {sec}s {spinner}", end="\r")
+                time.sleep(1)
         
         print(f"\n\n{Fore.GREEN}┌─────────────────────────────────────┐")
-        print(f"{Fore.GREEN}│  Emails sent: {success}/{count}{' ' * (19 - len(str(success)+str(count)))}│")
+        print(f"{Fore.GREEN}│  Emails sent: {success}/{count}          │")
+        print(f"{Fore.GREEN}│  Successful: {success}  Failed: {fail}    │")
         print(f"{Fore.GREEN}└─────────────────────────────────────┘{Style.RESET_ALL}")
         return success
     
@@ -796,6 +849,7 @@ class ZiskyWhatsAppBan:
         print(f"\n{Fore.GREEN}📊 Statistics:")
         print(f"  Total emails sent: {self.email_sender.sent_count}")
         print(f"  Successful: {self.email_sender.success_count}")
+        print(f"  Failed: {self.email_sender.fail_count}")
         success_rate = (self.email_sender.success_count/max(1,self.email_sender.sent_count))*100
         print(f"  Success rate: {success_rate:.1f}%")
         
