@@ -192,69 +192,71 @@ class ProxyManager:
         return self.all_proxies
     
     def test_proxy(self, proxy):
-        """Test if a proxy works"""
-        try:
-            proxy_parts = proxy.split(':')
-            if len(proxy_parts) != 2:
-                return False
-            
-            ip, port = proxy_parts
-            port = int(port)
-            
-            for test_url in self.test_urls:
-                try:
-                    proxies = {
-                        'http': f'http://{proxy}',
-                        'https': f'http://{proxy}'
-                    }
-                    
-                    response = requests.get(
-                        test_url, 
-                        proxies=proxies, 
-                        timeout=PROXY_TEST_TIMEOUT,
-                        verify=False
-                    )
-                    
-                    if response.status_code == 200:
-                        return True
-                        
-                except:
-                    continue
-            
+    """Test if a proxy works - FAST MODE"""
+    try:
+        proxy_parts = proxy.split(':')
+        if len(proxy_parts) != 2:
             return False
-            
-        except:
-            return False
+        
+        ip, port = proxy_parts
+        port = int(port)
+        
+        for test_url in self.test_urls:
+            try:
+                proxies = {
+                    'http': f'http://{proxy}',
+                    'https': f'http://{proxy}'
+                }
+                
+                response = requests.get(
+                    test_url, 
+                    proxies=proxies, 
+                    timeout=5,  # ← REDUCED from 10 to 5 seconds
+                    verify=False
+                )
+                
+                if response.status_code == 200:
+                    return True
+                    
+            except:
+                continue
+        
+        return False
+        
+    except:
+        return False
     
     def test_proxies_concurrent(self):
-        """Test proxies concurrently"""
-        print(f"{Fore.CYAN}[🔍] Testing {min(len(self.all_proxies), MAX_PROXIES_TO_TEST)} proxies...")
+    """Test proxies concurrently - FAST MODE"""
+    print(f"{Fore.CYAN}[🔍] Testing {min(len(self.all_proxies), MAX_PROXIES_TO_TEST)} proxies...")
+    
+    to_test = self.all_proxies[:MAX_PROXIES_TO_TEST]
+    self.working_proxies = []
+    
+    def test_worker(proxy):
+        if self.test_proxy(proxy):
+            with self.lock:
+                self.working_proxies.append(proxy)
+                print(f"{Fore.GREEN}[✅] Working: {proxy} ({len(self.working_proxies)})", end="\r")
+    
+    threads = []
+    for proxy in to_test:
+        thread = threading.Thread(target=test_worker, args=(proxy,))
+        thread.start()
+        threads.append(thread)
         
-        to_test = self.all_proxies[:MAX_PROXIES_TO_TEST]
-        self.working_proxies = []
-        
-        def test_worker(proxy):
-            if self.test_proxy(proxy):
-                with self.lock:
-                    self.working_proxies.append(proxy)
-                    print(f"{Fore.GREEN}[✅] Working: {proxy} ({len(self.working_proxies)})", end="\r")
-        
-        threads = []
-        for proxy in to_test:
-            thread = threading.Thread(target=test_worker, args=(proxy,))
-            thread.start()
-            threads.append(thread)
-            
-            if len(threads) >= 30:
-                for t in threads:
-                    t.join()
-                threads = []
-        
-        for t in threads:
-            t.join()
-        
-        print(f"\n{Fore.GREEN}[✅] Found {len(self.working_proxies)} working proxies")
-        return self.working_proxies
+        # INCREASE THIS NUMBER FOR FASTER TESTING
+        if len(threads) >= 100:  # ← Changed from 30 to 100
+            for t in threads:
+                t.join()
+            threads = []
+    
+    # Wait for remaining threads
+    for t in threads:
+        t.join()
+    
+    print(f"\n{Fore.GREEN}[✅] Found {len(self.working_proxies)} working proxies")
+    return self.working_proxies
     
     def get_proxy(self):
         """Get next working proxy in rotation"""
